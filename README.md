@@ -21,7 +21,7 @@ The main paper and the supplement reference each other through `xr-hyper`, so bo
 
 ## Author
 
-Min Wu ([@whitewum](https://github.com/whitewum))
+Min Wu, Hangzhou Dianzi University (wumin@hdu.edu.cn, [@whitewum](https://github.com/whitewum))
 
 ## License
 
