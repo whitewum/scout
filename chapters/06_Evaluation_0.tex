@@ -1,0 +1,62 @@
+\section{Evaluation}
+\label{sec:evaluation}
+
+\subsection{Setup, Baselines, and Metrics}
+\label{sec:eval-method}
+
+The evaluation asks whether SCOUT can make reliable decisions across the discrepancy patterns that arise in continuous heterogeneous validation, without depending on any particular
+engine pair. We therefore organize the evaluation around concentrated faults, diffuse discrepancies, side imbalance (drift), and increasing discrepancy scale, rather than around a specific
+cross-engine deployment.
+
+The evaluation proceeds in two stages.
+Parameterized synthetic workloads
+(\S\ref{sec:eval-spatial}--\S\ref{sec:eval-operating})
+isolate individual mechanisms and map operating boundaries.
+YCSB Zipfian workloads (\S\ref{sec:eval-ycsb}) introduce
+segment-size skew and hotness imbalance to test robustness
+under more realistic data-distribution conditions.
+Synthetic workloads cover concentrated, diffuse, and mixed
+heavy-tail patterns with explicit sweeps over drift
+intensity; exact constructions are given in
+Supplement~\ref{sec:appendix-workloads}.
+
+\paragraph{Baselines}
+We compare three methods under the single-round fixed-budget
+constraint.
+B1 (per-segment checksum) maintains one checksum per segment;
+because its digest grows with~$P$, it violates the
+fixed-budget constraint and serves only as a full-information
+reference rather than a same-budget baseline.
+B2 (CountSketch ranking) treats each segment as an item and
+outputs a top-$K$ candidate set ranked by difference intensity.
+B3 (hierarchical bucket tree) maps segments to leaf nodes of a
+fixed-depth tree and drills down from root to leaves by selecting
+high-score buckets at each level; when a leaf bucket is selected,
+all segments it contains become candidates, producing step-wise
+cost jumps of $P/b^d$ per bucket
+(Supplement~Fig.~\ref{fig:b3_bucket_tree}). B2 and B3 represent the two most natural fixed-budget single-round alternatives in this setting: unstructured ranking and structured hierarchical aggregation.
+All methods are aligned by digest memory in bytes at a primary
+tier of ${\sim}512$\,KiB; each baseline is additionally tested
+at ${\sim}2{\times}$ memory
+(exact configurations in Supplement~Table~\ref{tab:c5-0}).
+
+\paragraph{Metrics and operating-point selection}
+The primary triage metric is the candidate fraction
+$\mathtt{cand\_frac}{=}|\mathcal{C}|/P$.
+For triage comparisons, we sweep each method's internal tuning
+knob and report the best operating point that satisfies the
+target heavy-segment recall for the experiment, where
+$\mathtt{recall\_big}$ measures recall over the truly heavily
+dirty segments in the workload instance. Where a candidate-budget
+cap is imposed, infeasible points are marked as \textbf{N/A}.
+
+Gating quality is evaluated through false-alarm rate (FAR) and false-rejection rate (FRR) trade-offs. When
+the experiment includes abstention, we additionally report
+performance on decisive (non-\texttt{unknown}) samples.
+Sizing accuracy is reported as $\mathrm{Std(rel\_err)}$, the
+standard deviation of the relative estimation error
+$(\hat{D}-D)/D$ across repetitions.
+
+YCSB validation scales to ${\sim}2{\times}10^9$ records across
+$P{=}100{,}000$ segments with one-sided digest below 1\,MiB. Details are in
+Supplement~\ref{sec:appendix-scale}.

@@ -1,0 +1,114 @@
+\section{Fault-to-Action Mapping: Extended Reference}
+\label{sec:appendix-fault-mapping}
+
+This section extends the round-level summary in
+Table~\ref{tab:probe-outcome-mapping} by tracing each
+representative fault type through the probe's observable
+signature and the resulting downstream action.
+Table~\ref{tab:fault-shape-mapping-full} provides a condensed
+index; the paragraphs that follow supply numerical context,
+evaluation cross-references, and boundary-case discussion.
+
+\begin{table}[!htbp]
+\caption{Fault-to-action index: representative fault types,
+key observable ranges, and gating verdicts.}
+\label{tab:fault-shape-mapping-full}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Fault type & $K_{\text{eff}}/L$ & Verdict \\
+\midrule
+Node / shard failure     & 0.003--0.02 & \texttt{notgate} \\
+One-sided backlog        & 0.003--0.08 & \texttt{notgate} \\
+TTL / config drift       & 0.84--0.93  & \texttt{gate} \\
+Gray failure (mixed)     & 0.015--0.43 & varies \\
+Segmenter misconfiguration & ${\approx}\,1$ & \texttt{gate} \\
+Zero-window segment      & --           & skip \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Node crash or shard failure}
+A node or shard failure produces a small number of heavily
+dirty segments (small~$B$, large~$d_{\text{big}}$),
+concentrating discrepancy energy in a narrow band on the
+section axis.  The concentration metric
+$K_{\text{eff}}/L \approx BW/L$ falls well below the gating
+threshold (measured ${\sim}0.003$--$0.02$), and the round is
+admitted to triage, which outputs a compact candidate set.
+When $B$ is very small, however, occupancy may drop below
+$\tau_{\text{occ}}$, yielding a \texttt{unknown} verdict
+instead.  This outcome is operationally benign: it signals a
+concentrated pattern---precisely the regime where triage would
+be most effective---rather than masking a diffuse fault.
+Deployment policy can combine $\hat{D}$ and occupancy to
+decide whether to attempt a budget-capped triage pass
+(\S\ref{sec:eval-spatial}, \S\ref{sec:eval-ycsb} Bimodal;
+\S\ref{sec:eval-dedrift}).
+
+\paragraph{One-sided replication backlog}
+When update propagation proceeds unevenly, unsynchronized keys
+accumulate predominantly on one side, producing strong drift
+($q$ deviating from~$0.5$) alongside a concentrated
+segment-level pattern.  The de-drifted energy removes this
+first-order sign bias, so both $\hat{D}$ and
+$K_{\text{eff}}/L$ remain stable regardless of~$q$
+(\S\ref{sec:eval-dedrift}; cross-configuration values in
+Table~\ref{tab:c2-5}).  The round proceeds to sizing alert
+first; the gating verdict then determines whether triage or a
+fallback path follows.  Without de-drifting, the raw second
+moment would produce sizing distortion on the order
+of~$10^4\%$ in this scenario
+(\S\ref{sec:eval-ycsb} Drift-shaped).
+
+\paragraph{TTL drift or global configuration inconsistency}
+Broad, low-rate anomalies---such as TTL mismatches or
+schema-level incompatibilities---affect many segments at low
+per-segment intensity, producing a diffuse energy profile.
+$K_{\text{eff}}/L$ rises to ${\sim}0.84$--$0.93$, well above
+the gating threshold, and the round is classified as
+\texttt{gate}: triage is bypassed in favor of a conservative
+fallback.  A noteworthy subtlety arises under Zipfian
+segment-size skew (the Weighted Diffuse family in
+\S\ref{sec:eval-ycsb}): although the record-level fault
+mechanism is the same independent per-record loss, hot segments
+lose disproportionately more keys, shifting the segment-level
+shape toward concentration and reducing $K_{\text{eff}}/L$
+to~${\sim}0.12$.  The gating metric thus tracks segment-level
+shape rather than record-level fault semantics.
+
+\paragraph{Gray failure}
+Mixed fault patterns---a few heavily dirty segments embedded
+in a noisy tail of mildly dirty ones---place
+$K_{\text{eff}}/L$ in an intermediate range (from
+${\sim}0.015$ in the base drift-stability setting to
+${\sim}0.43$ under high-pressure noise coverage;
+\S\ref{sec:eval-dedrift}, Table~\ref{tab:c2-5}).  Whether the
+round is admitted to triage or classified as \texttt{gate}
+depends on where $K_{\text{eff}}/L$ falls relative to
+$\tau_{\text{gating}}$.  When noise coverage exceeds
+approximately~0.3, the system approaches the gating boundary,
+and roughly 4\% of conditional false alarms originate from
+this interval (\S\ref{sec:appendix-far-breakdown}).  In
+admitted rounds, the runtime stopping rule
+(\S\ref{sec:eval-stoploss}) limits candidate expansion
+(\S\ref{sec:eval-comparison}, \S\ref{sec:eval-operating}).
+
+\paragraph{Segmenter misconfiguration}
+A misconfigured segmenter effectively randomizes key-to-segment
+assignment, producing near-total discrepancy
+($\hat{D} \approx$ total population) with a strongly diffuse
+shape ($K_{\text{eff}}/L \approx 1$).  The combination of
+extreme~$\hat{D}$ and $K_{\text{eff}}/L$ near unity is rare
+under normal faults, so it can serve as a dedicated alarm
+condition signaling configuration error rather than data
+divergence.
+
+\paragraph{Zero-window segments}
+Segments whose mapped window contains only zero-energy sections
+($E_s^{(v)}{=}0$ and $\mathrm{net\_sum}_s^{(v)}{=}0$ in any
+single view) can be excluded from downstream verification
+without further inspection.  The derivation is given in
+\S\ref{sec:appendix-sizing-zero-energy}.

@@ -1,0 +1,87 @@
+\section{Notations}
+\label{sec:notations}
+
+Core probe geometry parameters are listed in Table~\ref{tab:scout-params}; the system model, algorithm definitions, and evaluation metrics are given in \S\ref{sec:problem}, \S\ref{sec:design}, and \S\ref{sec:eval-method}, respectively. This section supplements the remaining symbols.
+
+\begin{table}[!thbp]
+\centering
+\small
+\begin{tabular}{lp{0.68\columnwidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+\multicolumn{2}{l}{\textbf{Differences and workloads}} \\
+$D^{+}$, $D^{-}$ & Number of diff keys present only on side A (B) \\
+$\hat D$ & Scale estimate output by sizing \\
+$S$ & Number of noise segments in mixed workloads (each carrying $d_{\text{small}}$ differences) \\
+$d_{\text{big}}$ & Difference intensity of a single heavily dirty segment \\
+$d_{\text{small}}$ & Difference intensity of a single noise segment \\
+\texttt{ratio} & Separability knob, $\texttt{ratio}=d_{\text{big}}/d_{\text{small}}$ \\
+\texttt{S/B} & Noise-to-signal segment multiplier (count ratio in mixed workloads) \\
+$q$ & Drift parameter: probability that a diff key belongs to side A (\texttt{side\_plus\_prob}) \\
+\midrule
+\multicolumn{2}{l}{\textbf{Probe geometry}} \\
+$M$ & Total cell count of a single view, $M=L\cdot m_0$ \\
+$M_{\text{bytes}}$ & Probe digest size in bytes, $M_{\text{bytes}}=4\,V\,L\,m_0$ \\
+$h_v(p)$ & Window-start hash of segment $p$ in view $v$ \\
+\bottomrule
+\end{tabular}
+\caption{Symbol table (I): differences and probe geometry.}
+\label{tab:notations-1}
+\end{table}
+
+
+\begin{table}[!thbp]
+\centering
+\small
+\begin{tabular}{lp{0.68\columnwidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+\multicolumn{2}{l}{\textbf{Triage and operating points}} \\
+$\Omega_u$ & Window aggregation score, $\Omega_u=\sum_{s=u}^{u+W-1}E_s$ \\
+$t$ & Truncation window count, $t=\lceil r\cdot(L{-}W{+}1)\rceil$ \\
+$\mathrm{r_{top}}$ (\texttt{top\_r}) & Truncation ratio knob for triage \\
+$p_{\mathrm{halo}}$ & False-inclusion probability of a clean segment in a single view \\
+$\mathcal{C}$ & Candidate segment set \\
+\texttt{cand\_cnt} & Candidate segment count (i.e., $|\mathcal{C}|$) \\
+\texttt{cand\_frac} & Candidate fraction, $\texttt{cand\_frac}=|\mathcal{C}|/P$ \\
+\texttt{recall\_big} & Fraction of $d_{\text{big}}$ segments covered by the candidate set \\
+\midrule
+\multicolumn{2}{l}{\textbf{Baselines}} \\
+$\rho_{\text{topK}}$ & B2 head-mass fraction, $\rho_{\text{topK}}=\sum_{p\in\text{topK}}\hat{d}_p\,/\,\sum_p\hat{d}_p$ \\
+\bottomrule
+\end{tabular}
+\caption{Symbol table (II): triage, operating metrics, and baselines.}
+\label{tab:notations-3}
+\end{table}
+
+
+\begin{table}[!thbp]
+\centering
+\small
+\begin{tabular}{lp{0.68\columnwidth}}
+\toprule
+Symbol & Meaning \\
+\midrule
+\multicolumn{2}{l}{\textbf{Section-level statistics}} \\
+$\Delta_j$ & Difference count of cell $j$, $C^{(A)}_j-C^{(B)}_j$ \\
+$\mathrm{net\_sum}_s$ & First moment of section $s$, $\sum_{j\in s}\Delta_j$ \\
+$\mathrm{sq\_sum}_s$ & Raw second moment of section $s$, $\sum_{j\in s}\Delta_j^2$ \\
+$E_s$ & De-drifted energy, $E_s=\mathrm{sq\_sum}_s-\frac{(\mathrm{net\_sum}_s)^2}{m_0}$ \\
+$E_s^{(v)}$ & De-drifted energy of section $s$ in view $v$ \\
+$w_s$ & Normalized energy weight, $w_s=E_s/\sum_s E_s$ \\
+\midrule
+\multicolumn{2}{l}{\textbf{Gating}} \\
+$K_{\text{eff}}$ & Effective number of sections (reciprocal of the Herfindahl index), $K_{\text{eff}}=1/\sum_s w_s^2$ \\
+$K_{\text{eff}}/L$ & Normalized support dispersion of the energy spectrum (low = concentrated, high = diffuse) \\
+$\mathrm{occ}$ & Cross-view fraction of non-empty sections (Eq.~\eqref{eq:occupancy}) \\
+$\tau_{\text{occ}}$ & Occupancy threshold (three-state abstention boundary) \\
+$\tau_{\text{gating}}$ & Gating concentration threshold (lower = more aggressive) \\
+$\mathrm{FAR_{cond}}$ & Conditional false-alarm rate (fraction of decisive samples in which a concentrated pattern is misclassified as diffuse) \\
+$\mathrm{FRR_{cond}}$ & Conditional false-rejection rate (fraction of decisive samples in which a diffuse pattern is misclassified as concentrated) \\
+\bottomrule
+\end{tabular}
+\caption{Symbol table (III): section-level statistics and gating.}
+\label{tab:notations-2}
+\end{table}

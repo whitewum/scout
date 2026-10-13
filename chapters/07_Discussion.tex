@@ -1,0 +1,99 @@
+\section{Discussion}
+\label{sec:discussion}
+
+SCOUT is designed for deployments where reconciliation runs as
+a continuous background function, most rounds are expected to
+be clean, and exact verification is expensive relative to a
+fixed-size probe exchange. In this setting, the three probe
+outputs serve distinct operational roles: sizing always
+provides a severity signal; gating decides whether the current
+discrepancy shape supports economical candidate
+compression; and triage narrows the verification scope when
+the discrepancy is sufficiently concentrated. Table~\ref{tab:probe-outcome-mapping}
+summarizes the round-level interpretation. In the common
+clean-round case, reconciliation terminates after a single
+fixed-cost probe exchange, without invoking downstream
+verification. Precise localization and repair within the
+candidate scope remain delegated to downstream mechanisms such
+as Merkle trees or IBLTs; SCOUT's role ends at diagnosis.
+
+
+\begin{table}[!htbp]
+\caption{Representative operational scenarios and typical probe outcomes.}
+\label{tab:probe-outcome-mapping}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{0.2pt}
+\begin{tabular}{@{}p{0.26\linewidth}p{0.15\linewidth}p{0.15\linewidth}p{0.45\linewidth}@{}}
+\toprule
+Scenario & $\hat{D}$ & $g$ & Action \\
+\midrule
+Normal round
+  & $\approx 0$ 
+  & -- 
+  & {skip downstream verification} \\[2pt]
+
+\shortstack[l]{Shard failure} 
+  & varies 
+  & \texttt{notgate} 
+  & \shortstack[l]{triage, then verify on $\mathcal{C}$} \\[2pt]
+
+\shortstack[l]{One-sided\\backlog}
+  & large
+  & varies
+  & \shortstack[l]{severity alert; triage if\\shape admits, else fallback} \\[2pt]
+
+
+\shortstack[l]{Diffuse dis-\\crepancy} 
+  & \shortstack[l]{moderate\\or large} 
+  & \texttt{gate} 
+  & \shortstack[l]{bypass triage; use fallback} \\[2pt]
+
+\shortstack[l]{Low obser-\\vability} 
+  & varies 
+  & \texttt{unknown} 
+  & \shortstack[l]{defer, capped triage, or fallback} \\[2pt]
+
+\shortstack[l]{Segmenter\\misconfiguration}
+  & $\approx$ total 
+  & \texttt{--} 
+  & \shortstack[l]{inspect config} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+Among the probe outcomes in Table~\ref{tab:probe-outcome-mapping}, \texttt{unknown} merits separate discussion. It is an explicit abstention:
+  the probe lacks sufficient statistical support for a reliable shape judgment. The most common trigger is a small number of concurrent
+faults, which leaves too few sections energized for $K_{\mathrm{eff}}/L$ to reliably separate concentrated from diffuse patterns.
+Paradoxically, this is also the regime where triage is most effective, since a small $B$ yields high signal separability and strong candidate
+  compression. In deployment, \texttt{unknown} rounds can still be acted upon by combining $\hat{D}$ with other observables such as occupancy:
+  deferring when $\hat{D}$ is small, or proceeding with a capped triage pass when $\hat{D}$ is large. What SCOUT withholds is a shape-based
+recommendation, not the scale signal itself.
+
+A natural question is whether the discrepancy axes used
+in our evaluation---concentration, diffuseness, and side
+imbalance---provide a useful abstraction for fault scenarios
+encountered in practice. Our results suggest that they capture
+several common manifestations relevant to continuous
+reconciliation: concentrated discrepancies tend to benefit
+from triage, diffuse ones are more likely to be diverted by
+gating, and asymmetric ones still admit a stable sizing signal
+through de-drifted energy. This abstraction is not intended as
+an exhaustive fault taxonomy. One scenario that may appear to
+fall outside it is spatially correlated dirty segments in the
+underlying key space; however, after hash-based segment
+mapping, such correlation often appears as a larger effective
+$B$, which is already reflected in the capacity-degradation
+dimension characterized in \S\ref{sec:eval-operating}.
+
+
+Two limitations remain. First, the synthetic and YCSB-driven
+workloads do not establish how frequently each discrepancy
+class arises in production, nor whether additional classes
+emerge under real operational correlations or temporal
+patterns. Second, under extreme multi-fault overlap
+($B \cdot W$ approaching~$L$), the sparse-overlap
+approximation used in the candidate-size analysis begins to
+break down, and this regime would benefit from a tighter
+characterization.

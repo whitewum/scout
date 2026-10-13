@@ -1,0 +1,95 @@
+\subsection{Validation under YCSB-Driven Workloads}
+\label{sec:eval-ycsb}
+
+This section introduces segment-size skew as a robustness
+dimension absent from the synthetic experiments above.
+We use a YCSB Zipfian distribution ($\alpha{=}0.99$) to
+generate the base keyspace and evaluate the following fault families:
+\emph{Bimodal} (bounded-blast-radius concentrated faults),
+\emph{Drift-shaped} (lag concentrated on hot segments),
+and \emph{Uniform Diffuse} (broad low-rate anomalies).
+Each family is instantiated at three data-scale tiers---Light
+(20M records, $P{=}100{,}000$), Medium (200M), and Heavy
+(2B)---which induce progressively denser segment fill states
+under the same Zipfian workload.
+A fourth family, \emph{Weighted Diffuse} (per-record loss
+under segment-size skew), is further detailed in
+Supplement~\ref{sec:appendix-ycsb-weighted} along with
+parameterization details for all families
+(Supplement Tables~\ref{tab:c6-trace-density}
+and~\ref{tab:appendix-c6-faults}).
+
+\paragraph{Gating}
+The upper panel of Table~\ref{tab:c6-trace-triage} reports
+SCOUT's $K_{\text{eff}}/L$, as \S\ref{sec:eval-comparison}
+shows that neither baseline provides a reliable gating signal.
+All four fault families form a clear gradient: Bimodal at
+approximately $0.003$ (highly concentrated), Drift-shaped at
+approximately $0.08$, Weighted Diffuse at approximately
+$0.12$, and Uniform Diffuse at approximately $0.93$ (highly
+diffuse). The wide separation between the first three
+families ($K_{\text{eff}}/L \le 0.12$) and Uniform Diffuse
+(${\ge}0.93$) leaves a broad margin for placing
+$\tau_{\text{gating}}$: the first three families are admitted to the triage path while Uniform Diffuse is diverted to fallback.
+$K_{\text{eff}}/L$ is nearly invariant across the three
+data-scale tiers, indicating that the gating metric is
+governed by segment-level fault shape rather than data
+density. All families yield sufficient occupancy for decisive
+gating across all three tiers, with no \texttt{unknown}
+outcomes; full distributions are shown in
+Supplement Figure~\ref{fig:c6-gating}.
+
+\paragraph{Triage}
+The lower panel of Table~\ref{tab:c6-trace-triage} reports the
+minimum candidate fraction achieving
+$\texttt{recall\_big}\ge 0.95$ under a 2\% cap. Bimodal faults
+yield a stable candidate fraction of $3{\times}10^{-5}$;
+Drift-shaped faults yield approximately
+$7.3{\times}10^{-4}$. Across the three tiers, candidate
+fractions change little: with $P$ and the segment-level fault
+pattern held fixed, increasing the record count mainly
+densifies segment fill rather than changing the sketch-level
+concentration pattern. Uniform Diffuse does not appear in the
+triage panel because gating diverts it to fallback.
+
+\paragraph{Sizing}
+Drift-shaped faults are the hardest sizing case because they
+combine segment-size skew with concentration on hot segments.
+With the Bessel correction applied, the de-drifted estimator
+achieves a median relative error of 0.8\%--1.4\% across
+the three tiers (p90 $\le 2.8\%$), matching the accuracy
+observed under the uniform settings of
+\S\ref{sec:eval-dedrift}; raw-control results are reported in
+Supplement Table~\ref{tab:c6-sizing}.
+
+\begin{table}[!thbp]
+\caption{YCSB-driven validation summary across data-scale tiers.
+Upper: gating statistic; lower: triage candidate fraction.}
+\label{tab:c6-trace-triage}
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccc}
+\toprule
+Family & Light & Medium & Heavy \\
+\midrule
+\multicolumn{4}{c}{SCOUT Gating: median $K_{\text{eff}}/L$} \\
+\midrule
+Bimodal          & 0.003 & 0.003 & 0.003 \\
+Drift-shaped     & 0.082 & 0.082 & 0.081 \\
+Weighted Diffuse & 0.122 & 0.118 & 0.120 \\
+Uniform Diffuse  & 0.931 & 0.938 & 0.939 \\
+\midrule
+\multicolumn{4}{c}{SCOUT Triage: min $\texttt{cand\_frac}$
+  at $\texttt{recall\_big}{\ge}0.95$} \\
+\midrule
+Bimodal      & $3{\times}10^{-5}$ & $3{\times}10^{-5}$ & $3{\times}10^{-5}$ \\
+Drift-shaped & $7.3{\times}10^{-4}$ & $7.4{\times}10^{-4}$ & $7.3{\times}10^{-4}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Sections~\ref{sec:eval-spatial}--\ref{sec:eval-ycsb} evaluate SCOUT's triage, sizing, and gating behavior across controlled synthetic workloads and YCSB-driven skewed workloads. Because
+these results assume uniform hashing at the probe interface, we additionally verify in Supplement~\ref{sec:appendix-hash} that the triage operating points remain stable across three hash
+implementations, two key structures, and $k\in\{1,2,3\}$.
+\phantomsection\label{sec:eval-summary}

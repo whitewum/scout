@@ -1,0 +1,85 @@
+\begin{figure}[!htbp]
+  \centering
+  \resizebox{0.98\linewidth}{!}{%
+  \begin{tikzpicture}[
+      font=\small,
+      bucket/.style={circle,draw=gray!35,minimum size=7mm,inner sep=0pt,fill=white},
+      bucketSel/.style={circle,draw=blue!70!black,very thick,minimum size=7mm,inner sep=0pt,fill=blue!8},
+      edge/.style={-Latex,thick,draw=gray!30},
+      edgeSel/.style={-Latex,very thick,draw=blue!70!black},
+      box/.style={draw=gray!60,rounded corners,fill=gray!5},
+      seg/.style={draw,minimum size=4.2mm,inner sep=0pt,rounded corners=0.5pt},
+      segClean/.style={seg,fill=gray!25,draw=gray!45},
+      segDirty/.style={seg,fill=red!70,draw=red!80!black},
+      note/.style={align=left},
+      brace/.style={decorate,decoration={brace,amplitude=4pt}}
+    ]
+
+    % --- Hierarchical bucket tree ---
+    \node[bucket] (root) {root};
+    \node[above=3mm of root, font=\bfseries] {Update \& Drill-down};
+
+    \node[bucket,below=10mm of root] (l1m) {};
+    \node[bucket,below left=10mm and 18mm of root] (l1l) {};
+    \node[bucket,below right=10mm and 18mm of root] (l1r) {};
+
+    \draw[edge] (root) -- (l1l);
+    \draw[edge] (root) -- (l1m);
+    \draw[edge] (root) -- (l1r);
+
+    \node[bucket,below=10mm of l1m] (l2m) {};
+    \node[bucket,below left=10mm and 12mm of l1m] (l2l) {};
+    \node[bucket,below right=10mm and 12mm of l1m] (l2r) {};
+
+    \draw[edge] (l1m) -- (l2l);
+    \draw[edge] (l1m) -- (l2m);
+    \draw[edge] (l1m) -- (l2r);
+
+    % Selected drill-down path
+    \node[bucketSel] (l1ms) at (l1m) {top-$t$};
+    \node[bucketSel] (l2ms) at (l2m) {leaf};
+    \draw[edgeSel] (root) -- (l1ms);
+    \draw[edgeSel] (l1ms) -- (l2ms);
+
+    % --- Visualize "collateral expansion" at the selected leaf ---
+    % Reduced box width (44mm) and increased distance from leaf node above to accommodate text
+    \node[box,below=15mm of l2ms,minimum width=44mm,minimum height=20mm] (bucketbox) {};
+    
+    % Attach text to the arrow side to avoid overlapping with the box
+    \draw[edgeSel] (l2ms) -- (bucketbox.north) node[midway, right=2mm, font=\bfseries] {Expand selected bucket};
+
+    % Center the internal segments
+    \coordinate (center) at (bucketbox.center);
+    % 5 columns x 2 rows grid, dynamically offset from center point
+    \foreach \i [evaluate=\i as \xoff using (\i-2)*5.5] in {0,...,4} {
+      \foreach \j [evaluate=\j as \yoff using (0.5-\j)*5.5] in {0,1} {
+        \node[segClean] at ($(center)+(\xoff mm, \yoff mm)$) {};
+      }
+    }
+    % Draw a conspicuous dirty segment (placed at i=1, j=0 position, i.e., upper-left side, appears natural)
+    \node[segDirty] at ($(center)+(-5.5 mm, 2.75 mm)$) {};
+
+    \node[below=1.5mm of bucketbox.south, note]
+      {\textbf{1}~dirty segment mixed with \textbf{many}~clean ones};
+
+    % --- Cost jump annotation ---
+    % Draw right brace
+    \draw[brace,thick,draw=red!75!black] ($(bucketbox.north east)+(1.5mm,0mm)$) -- ($(bucketbox.south east)+(1.5mm,0mm)$);
+    
+    % Draw staircase red line starting from right of brace (extends right 12mm)
+    \coordinate (stair_start) at ($(bucketbox.east)+(3.5mm,-3mm)$);
+    \draw[thick,draw=red!75!black] (stair_start) -- ++(4mm,0) -- ++(0,2.5mm) -- ++(4mm,0) -- ++(0,2.5mm) -- ++(4mm,0) coordinate (stair_end);
+    
+    % Text strictly aligned to the right of staircase endpoint, completely prevent overlap
+    \node[anchor=west, note] at ($(stair_end)+(1mm, -2.5mm)$) {\textbf{Cost jump}\\$+P/b^{d}$ candidates};
+
+    % Weaken unselected branches
+    \foreach \n in {l1l,l1r,l2l,l2r} {
+      \node[bucket,draw=gray!25,text=gray!60] at (\n) {};
+    }
+
+  \end{tikzpicture}%
+  }
+  \caption{B3 (hierarchical bucket tree) baseline: segments are mapped to leaf nodes of a fixed tree ($b{=}3, d{=}2$ in this example). During reconciliation, the probe drills down from root to leaves by selecting high-score buckets at each level. Once a leaf bucket is selected, \emph{all} segments in that bucket---including the many clean ones---must be expanded as candidates, causing a step-wise cost jump.}
+  \label{fig:b3_bucket_tree}
+\end{figure}

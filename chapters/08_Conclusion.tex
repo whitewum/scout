@@ -1,0 +1,23 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+SCOUT is a single-round, fixed-budget diagnostic probe that
+serves as a front-end to precise downstream verification in
+heterogeneous replication. From one sketch exchange, it
+jointly provides discrepancy sizing, shape-based gating, and
+candidate-scope triage, all derived from a shared
+de-drifted statistical substrate. Across synthetic stress
+tests, same-budget baseline comparisons, and YCSB-driven
+workloads, the results show that these three outputs can be
+combined within a single fixed-budget probe while remaining
+useful across concentrated, diffuse, and asymmetric
+discrepancy regimes.
+
+More broadly, SCOUT shows that continuous reconciliation need
+not pay full validation cost on every round. By separating
+diagnosis from exact repair, clean rounds terminate after a
+fixed probe exchange, while anomalous rounds invoke more
+expensive downstream verification only when the observed
+discrepancy warrants it. An important next step is to
+validate how the discrepancy classes studied here are
+distributed in production traces and deployments.

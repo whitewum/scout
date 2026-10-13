@@ -1,0 +1,12 @@
+\begin{abstract}
+Continuous data replication requires repeated source--target validation. In heterogeneous replication, the two sides cannot rely on shared internal checksums or repair primitives, so validation must proceed
+through a black-box replica interface. Yet precise verification in every round incurs sustained cost proportional to data scale, even though most rounds reveal no actionable discrepancy.
+
+This paper presents SCOUT, a single-round, fixed-budget diagnostic probe for continuous reconciliation over black-box replicas. From a single sketch exchange, SCOUT estimates discrepancy size, predicts whether
+ narrow verification is likely to pay off, and identifies data segments that merit follow-up verification. These decisions are derived from a shared energy statistic whose interpretation remains stable under side imbalance. By
+coupling each segment to a contiguous observation interval, SCOUT turns concentrated faults into localized energy peaks that can be compressed through sliding-window aggregation. When the signal is too diffuse for reliable compression,
+SCOUT abstains and defers to a fallback verification path.
+
+Across same-budget baselines and large-scale YCSB Zipfian workloads, SCOUT reduces candidate cost by nearly an order of magnitude under concentrated faults, keeps sizing error within 3\% even under severe side
+ imbalance, and achieves low false-alarm and false-rejection rates for verification gating.
+\end{abstract}

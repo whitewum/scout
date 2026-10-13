@@ -1,0 +1,133 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Precise localization and recovery}
+Merkle trees and the anti-entropy
+family~\cite{merkle1987digital,demers1987epidemic,vanrenesse1998gossip,vanrenesse2008reconciliation}
+locate and repair inconsistencies through iterative drill-down,
+but each round requires a cross-replica exchange; in
+cross-datacenter settings the interaction cost is amplified
+by RTT~\cite{vogels2009eventually,terry1995managing}.
+Set reconciliation~\cite{minsky2003set} and IBLT
+variants~\cite{eppstein2011difference,goodrich2011invertible}
+can recover all differing items in a single round only below a
+decodable capacity threshold~\cite{aldridge2019group}; later
+refinements such as PBS~\cite{gong2021pbs} and rateless
+IBLT~\cite{yang2024rateless} reduce this rigidity but still
+require either prior size estimates or multi-round adaptation.
+Recent work further improves IBLT space                        
+efficiency~\cite{fleischhacker2024iblt}, robustness            
+trade-offs~\cite{belazzougui2024reconciliation}, and           
+parameterless  guarantees~\cite{keniagin2025certainsync}.                     
+In the continuous-validation setting we study, these
+mechanisms serve as downstream verifiers; the missing piece is
+a fixed-budget front-end that decides \emph{whether} and
+\emph{where} to invoke them.
+
+\paragraph{Single-round summaries and sketches} 
+The first path targets global discrepancy sizing.
+Bloom-filter-family structures~\cite{bloom1970space,fan2014cuckoo,
+dillinger2021ribbon,broder2004network} and HLL-style
+estimators~\cite{flajolet2007hyperloglog,heule2013hyperloglog}---deployed
+in production as Redis HyperLogLog~\cite{sanfilippo2014redis} and
+Apache DataSketches~\cite{datasketches2024frequent}---provide compact
+cardinality primitives;
+the Strata estimator~\cite{eppstein2011difference} layers
+sampling over IBLTs to estimate difference size across scales;
+SetSketch~\cite{ertl2021setsketch} and the Odd
+Sketch~\cite{mitzenmacher2014odd} unify cardinality and
+similarity estimation in a single structure.
+All can emit a sizing signal from small summaries;
+localization and admission are outside their design goals.
+
+The second path targets per-segment ranking.
+Heavy-hitter sketches such as
+CountSketch~\cite{charikar2002finding} and
+Count-Min~\cite{cormode2005improved,cormode2008finding} are
+fixed-budget frequency-estimation primitives widely deployed
+in streaming and telemetry
+settings~\cite{estan2002traffic,yu2013opensketch,erlingsson2014rappor,
+cormode2018privacy,han2022sketches}.
+In our setting, their per-item ranking capability provides a
+natural fixed-budget primitive for candidate generation:
+treating each segment as an item and its difference count as a
+frequency yields a top-$K$ candidate set ranked by estimated
+divergence intensity.
+We adopt this adaptation as baseline~B2
+in~\S\ref{sec:eval-comparison}.
+Candidate quality depends on the separation margin between
+dirty segments and background noise; we quantify this
+dependence empirically in \S\ref{sec:eval-comparison}.
+Learned variants~\cite{hsu2019learning} improve per-item
+accuracy under stable frequency priors but do not address
+the admission-control role studied here.
+A ranking sketch can always return a top-$K$ list, but cannot tell when doing so is uneconomical or when fallback would be preferable.
+
+
+Another fixed-budget alternative is a fixed-depth hierarchical
+bucket tree that provides coarse localization through
+structured aggregation (baseline~B3
+in~\S\ref{sec:eval-comparison}).
+Its bucket granularity leads to candidate expansion in
+discrete jumps, making the trade-off between localization and
+candidate size more coarse-grained; we examine this behavior
+empirically in \S\ref{sec:eval-comparison}.
+
+For a single-round fixed-budget front-end probe, these
+capabilities---scope, scale, and admission---have not
+previously been unified in a single structure.
+Table~\ref{tab:rw-gap} summarizes how representative
+approaches map to these outputs in this setting.
+
+\begin{table}[!htbp]
+\caption{Representative approaches mapped to the three
+diagnostic outputs studied in this paper, in the single-round
+fixed-budget setting with a black-box replica interface.
+\ding{51} = supported;\;
+\ding{55} = not supported;\;
+$\triangle$ = partial or fragile.}
+\label{tab:rw-gap}
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & Scope & Scale & \shortstack{Triage admission} \\
+\midrule
+Bloom / HLL family            & \ding{55} & \ding{51} & \ding{55} \\
+Strata estimator              & \ding{55} & \ding{51} & \ding{55} \\
+\shortstack[l]{CountSketch / CM (ranking, B2)}
+                              & \ding{51} & $\triangle$ & \ding{55} \\
+\shortstack[l]{Hierarchical bucket tree (B3)}
+                              & \ding{51} & $\triangle$ & \ding{55} \\
+Naive composition           & \ding{51} & \ding{51} & $\triangle$ \\
+\midrule
+\textbf{SCOUT}                & \ding{51} & \ding{51} & \ding{51} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Group testing and spatially coupled designs}
+%\noindent\textbf{Group testing and spatially coupled designs}\quad
+Triage can be viewed as identifying a sparse anomalous set from
+limited aggregate measurements, a setting studied in group
+testing~\cite{aldridge2019group}. SCOUT's contiguous-support
+mapping draws on the observation that spatially coupled
+measurement designs can improve inference thresholds under
+budget constraints~\cite{kudekar2011threshold,pmlr-v125-coja-oghlan20a}.
+
+\paragraph{Industrial practice}
+Production systems commonly trade off between multi-round anti-entropy
+and coarse per-range checksum
+workflows~\cite{decandia2007dynamo,lakshman2010cassandra,gonccalves2017dotteddb,taft2020cockroachdb}.
+In heterogeneous replication these tensions are sharper: the two sides
+often cannot share internal checksum structures or repair logic, leaving
+black-box summary exchange as the only portable
+interface~\cite{vogels2009eventually,terry1995managing,lloyd2011don,shapiro2011conflict}.
+Industrial source--target validation tools---including
+\texttt{pt-table-checksum}~\cite{percona-pt}, AWS DMS
+validation~\cite{aws-dms-validation}, GCP migration
+verification~\cite{gcp-dms-verify-migration}, and CockroachDB MOLT
+Verify~\cite{cockroach-molt-verify}---universally perform exact
+row-level comparison whose cost scales with the full data footprint
+on every invocation.
+These tools target migration cutover or post-failure audit, where a one-time full scan is acceptable. In the continuous setting studied here, however, most rounds find no actionable discrepancy, and the per-invocation cost of a full scan becomes the dominant overhead.

@@ -1,0 +1,336 @@
+\section{Design of SCOUT}
+\label{sec:design}
+
+
+\subsection{Probe Structure and Diagnostic Pipeline}
+\label{sec:overview}
+
+\paragraph{Probe structure}
+SCOUT uses the same fixed-size probe structure at both
+replicas.  Each replica maintains $V$ independent \emph{views};
+each view is a linear array of $L$ \emph{sections}, each
+section containing $m_0$ cells. Each cell stores a 32-bit
+signed counter, so each view contains $M = L \cdot m_0$ cells.
+Across all $V$ views, the probe occupies $4VLm_0$ bytes
+(e.g., ${\sim}512$\,KiB at $V{=}2$, $L{=}2048$, $m_0{=}32$),
+fixed at configuration time and independent of data scale~$P$.
+
+A two-level mapping (Fig.~\ref{fig:scout-mapping-structure-a})
+writes each key into this array: the key's segment determines
+a contiguous window of $W$ sections on the section axis, and a
+second hash selects $k$ cells within that window.  The
+contiguous-window structure is central to candidate
+compression and is analyzed in
+\S\ref{sec:spatial-coupling}.
+For analysis, both mapping stages are modeled as uniform and
+independent hashing; hash robustness is verified in Supplement~\ref{sec:appendix-hash}.
+
+\begin{figure}[!htbp]
+\centering
+\input{figures/scout_probe_a.tex}
+\caption{Two-level mapping in one view: segment $p$ is hashed
+to $W$ contiguous sections, then each key is hashed to $k$
+cells within that window.}
+\label{fig:scout-mapping-structure-a}
+\end{figure}
+
+%\paragraph{Pipeline}
+\noindent\textbf{Pipeline}\quad
+Each reconciliation cycle executes four stages; the first
+three are fixed-cost, while the fourth adapts to the observed
+evidence.
+
+\textbf{(1)~Build.}  Each replica sequentially scans its local key space; every item is inserted into the probe array via the two-level mapping described above.
+
+\textbf{(2)~Exchange \& Diff.}  The two replicas exchange
+their probes once; each side subtracts cell-wise to obtain the
+difference array
+$\Delta_j = C^{(A)}_j - C^{(B)}_j$.
+Because both replicas apply identical hash mappings to each
+item, any item present on both sides produces equal updates to
+the same probe cells.  These contributions cancel under
+cell-wise subtraction, so $\Delta$ is driven solely by items
+that differ between the two sides: items in $A\setminus B$
+contribute $+1$ signed updates, while those in
+$B\setminus A$ contribute~$-1$.
+
+\textbf{(3)~Decode.}  For every section~$s$ in each view, the decoder computes the first moment and the raw second moment:
+\[
+\mathrm{net\_sum}_s = \sum_{j \in s}\Delta_j
+,~
+\mathrm{sq\_sum}_s = \sum_{j \in s}\Delta_j^2,
+\]
+then constructs the \textbf{de-drifted energy}:
+\begin{equation*}
+E_s \;=\; \mathrm{sq\_sum}_s \;-\;
+         \frac{(\mathrm{net\_sum}_s)^{2}}{m_0}.
+\end{equation*}
+$E_s$ is the unnormalized sample variance of the differential
+counts within section~$s$.  It serves as the \emph{common signal}
+from which all three outputs are derived: triage consumes the
+spatial distribution of $\{E_s\}$ (where energy concentrates),
+sizing consumes the total mass $\sum_s E_s$ (how much energy
+exists), and gating consumes the support dispersion of
+$\{E_s\}$ (over how many sections energy spreads).  All three
+readings come from the same energy spectrum
+without budget
+partitioning.  The subtraction of $(\mathrm{net\_sum}_s)^2/m_0$ removes the
+first-order sign bias that would otherwise dominate the raw
+second moment under side imbalance, so $E_s$ captures
+fluctuation energy rather than drift-induced offset (note that
+$E_s \ge 0$ by the Cauchy--Schwarz inequality). The full
+derivation is given in
+Supplement~\ref{sec:appendix-sizing-derivation}.
+
+\textbf{(4)~Decide.} 
+Each diagnostic output reads the same section-level energy
+spectrum but fuses information across the $V$ views
+differently. Sizing computes a per-view scale estimate and averages across views. 
+Gating evaluates the concentration metric and occupancy on the energy spectrum (\S\ref{sec:gating}). Triage retains per-view window rankings and intersects the resulting candidate supersets to suppress view-dependent false inclusions.
+
+When all sections in a segment's mapped window carry zero
+signal ($E_s{=}0$ and $\mathrm{net\_sum}_s{=}0$) in any view, the segment can be excluded from downstream
+verification, because any diff key would have left a
+non-zero cell update within the window
+(Supplement~\ref{sec:appendix-sizing-zero-energy}).
+
+Sizing emits $\hat{D}$ (\S\ref{sec:dedrift});
+$\hat{D}\approx 0$ terminates the round without downstream
+verification.  Otherwise, gating tests $K_{\mathrm{eff}}/L$
+and occupancy (\S\ref{sec:gating}).
+On \texttt{notgate}, triage produces~$\mathcal{C}$ via
+sliding-window aggregation and cross-view intersection
+(Fig.~\ref{fig:scout-mapping-structure-b}).
+On \texttt{gate}, the system suppresses candidate generation
+and defers to a conservative fallback---e.g., full-scope exact
+verification or a coarse per-range checksum pass over all $P$
+segments---whose cost scales with $P$ rather than
+$|\mathcal{C}|$.
+On \texttt{unknown}, the probe withholds only a shape-based verdict; downstream policy may still invoke capped triage or full-scope fallback
+based on $\hat{D}$ and other observables (\S\ref{sec:eval-dedrift}).
+
+\begin{figure}[!htbp]
+\centering
+\input{figures/scout_probe_b.tex}
+\caption{From energy peaks to candidate segments:
+sliding-window aggregation identifies high-energy regions on
+the section axis; reverse mapping and cross-view intersection
+yield the candidate set~$\mathcal{C}$.}
+\label{fig:scout-mapping-structure-b}
+\end{figure}
+
+Beyond the unavoidable single sequential scan over local items,
+SCOUT incurs communication proportional to the fixed probe
+size and decoding cost of $O(VLm_0)$.
+Table~\ref{tab:scout-params} summarizes the core probe
+parameters.
+
+\begin{table}[!htbp]
+\caption{Quick reference for SCOUT core parameters.
+Full symbol table in Supplement~\ref{sec:notations}.}
+\label{tab:scout-params}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}cl@{}}
+\toprule
+Symbol & Meaning \\
+\midrule
+$P$ & Total segments ($10^4$--$10^7$) \\
+$B$ & Concurrently dirty segments (unknown at runtime) \\
+$D$ & Symmetric difference size, $D=D^{+}+D^{-}$ \\
+$V$ & Views / independent hash channels (2--4) \\
+$L$ & Sections per view (1024--8192) \\
+$m_0$ & Cells per section (16--64) \\
+$W$ & Window width in contiguous sections (2--4) \\
+$k$ & Per-key update redundancy (1--3) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Observation Geometry for Candidate Compression}
+\label{sec:spatial-coupling}
+
+Triage operates on the energy spectrum $\{E_s\}$.
+Its ability to compress the candidate set depends on whether
+dirty-segment energy remains localized on the section axis.
+Localized energy produces separable peaks and enables
+candidate compression; dispersed energy blends into
+background noise and reduces triage to broad ranking.
+
+
+\paragraph{Contiguous-interval mapping and sliding-window aggregation}
+To preserve locality, SCOUT maps each segment to $W$
+\textbf{contiguous} sections on the section axis.  Triage
+therefore scores \emph{windows} rather than individual
+sections.  For each starting position~$u$, SCOUT computes
+\[
+\Omega_u = \sum_{s=u}^{u+W-1} E_s,
+\]
+the total energy in the width-$W$ window beginning at~$u$.
+This sliding-window aggregation pools the energy that a single
+segment deposits across its $W$ adjacent sections, strengthening
+localized peaks while suppressing unstructured background
+noise---a width-$W$ matched filter in signal-processing terms.
+
+SCOUT then ranks all windows by~$\Omega_u$ and keeps the top
+$
+t = \left\lceil r_{\mathrm{top}} \cdot (L-W+1) \right\rceil
+$
+windows, where $r_{\mathrm{top}} \in (0,1]$ controls the
+candidate budget. Each selected window is then reverse-mapped
+to the segments whose supports overlap it
+(Fig.~\ref{fig:scout-mapping-structure-b}), producing a
+view-local candidate superset.
+The final candidate set~$\mathcal{C}$ is obtained by
+intersecting these supersets across all $V$ views, which
+suppresses false inclusions exponentially under approximately
+independent views while preserving true positives with high
+probability.
+
+The compression effect above depends on \emph{contiguity}: if
+the $W$ target sections were scattered randomly instead of
+placed contiguously, the sliding window would lose its locality
+advantage and the scheme would reduce to independent
+per-section ranking (\S\ref{sec:eval-spatial}).
+
+\paragraph{Scaling laws for candidate-set size}
+Under the uniform-hashing model (\S\ref{sec:overview}),
+if concentrated differences produce separable signals,
+the expected candidate-set size after intersecting across $V$
+views is:
+\begin{equation}\label{eq:cand-expectation}
+\mathbb{E}[|\mathcal{C}|]
+  \;\approx\; B \;+\; (P-B)\cdot p_{\mathrm{halo}}^{\,V},
+\end{equation}
+where $B$ is the number of truly dirty segments and the second
+term captures the \emph{halo} contribution: clean segments whose
+windows geometrically overlap with a selected dirty window are
+erroneously included in the candidate set.
+A clean segment's false-inclusion probability in a single view
+is
+\begin{equation}\label{eq:halo-prob}
+p_{\mathrm{halo}}
+  \;\approx\; \frac{t(2W-1)}{L}
+  \quad(\text{when } t(2W-1) \ll L),
+\end{equation}
+where $2W{-}1$ is the overlap neighborhood width of each
+selected window on the section axis.
+This framework implies three scaling laws:
+(i)~cross-view intersection raises $p_{\mathrm{halo}}$ to the
+$V$-th power, making $V$ the most effective lever against
+candidate inflation;
+(ii) the halo term grows with the number of clean segments,
+while larger $L$ reduces per-view overlap and suppresses false
+inclusion;
+(iii)~$W$ improves signal aggregation but simultaneously
+inflates the halo via the $2W{-}1$ factor, so there is no
+uniformly optimal~$W$
+(derivations in Supplement~\ref{sec:appendix-candidate-expectation}
+and~\ref{sec:appendix-w-pricing}).
+All three laws require that dirty windows remain separable
+on the section axis; when $L/B$ is too small, their supports
+overlap and candidate cost degrades sharply.
+This operating boundary is characterized empirically in
+\S\ref{sec:eval-operating} and modeled in
+Supplement~\ref{sec:appendix-operating-theory}.
+
+
+\subsection{Drift-Stable Sizing from the Shared Substrate}
+\label{sec:dedrift}
+
+The de-drifted energy~$E_s$ (\S\ref{sec:overview}) removes
+the first-order sign bias that would otherwise cause sizing
+to overestimate by orders of magnitude under drift; we now
+derive the estimator built on it.
+Let $M = L \cdot m_0$ denote the total cell count
+of a single view.
+Under the same uniform-hashing model, the expected total
+de-drifted energy is:
+\[
+\mathbb{E}\!\left[\sum_s E_s\right]
+  \;=\; D \cdot k\!\left(1 - \frac{k}{M}\right).
+\]
+Mean subtraction cancels the drift factor~$(2q{-}1)^2$
+exactly: both the squared-mean component of~$\mathrm{sq\_sum}$
+and the correction term~$\mathrm{net\_sum}^{2}/m_0$ scale
+quadratically with the mean sign bias~$(2q{-}1)$, and their
+coefficients match, so after subtraction the expectation does
+not depend on~$q$.
+The sizing estimator is
+\[
+  \hat{D} \;=\; \frac{\sum_s E_s}{\,k\bigl(1 - k/M\bigr)\,},
+\]
+where the denominator $1{-}k/M$ corrects for energy dilution
+from cross-key collisions within the same cell.
+
+Two minor bias sources remain.
+First, $E_s$ as a sample variance exhibits finite-sample
+shrinkage, removable by a Bessel correction factor
+$m_0/(m_0{-}1)$.
+Second, when differences are highly concentrated in a few
+sections the global uniformity approximation introduces a
+systematic underestimate of roughly $1$--$2\%$.
+After both corrections the measured relative bias converges to
+within approximately $3\%$ across all tested configurations (\S\ref{sec:eval-dedrift}).
+
+Multi-view fusion provides additional robustness:
+averaging across approximately independent views drives
+the standard deviation down as $1/\sqrt{V}$, making $V$
+and $m_0$ the two main tuning knobs for sizing precision.
+Derivations covering drift cancellation, bias
+corrections, and multi-view fusion are given in
+Supplement~\ref{sec:appendix-sizing-derivation}
+and~\ref{sec:appendix-sizing-bias}.
+
+
+\subsection{Admission and Abstention: When Not to Triage}
+\label{sec:gating}
+
+The gating decision rests on two observable quantities
+derived from the energy spectrum: how broadly the energy is
+spread, and whether the sketch carries enough statistical
+support to make that measurement reliable.
+
+\paragraph{Concentration metric}
+We measure energy dispersion by the inverse Herfindahl index
+\begin{equation*}
+\frac{K_{\mathrm{eff}}}{L}
+  \;=\; \frac{1}{L}\,\frac{\bigl(\sum_s E_s\bigr)^{2}}
+        {\sum_s E_s^{2}}
+  \;\in\; [1/L,\,1].
+\end{equation*}
+$K_{\mathrm{eff}}/L$ measures how many sections carry appreciable energy. It is invariant to overall discrepancy scale and to drift when computed from de-drifted energy. Under concentrated
+faults, energy resides in roughly $BW$ sections, placing $K_{\mathrm{eff}}/L$ at the scale of $BW/L$, typically far below~$1$; under diffuse differences with sufficient occupancy it
+approaches~$1$. In the concentrated regime, $K_{\mathrm{eff}}/L$ also governs candidate inflation: a larger value requires a more generous truncation budget to preserve recall, widening
+halo overlap so that candidate cost grows as $p_{\mathrm{halo}}^V$. $K_{\mathrm{eff}}/L$ therefore serves not only as a shape statistic but as a cost-oriented proxy for whether triage
+remains economical. Because concentrated and diffuse discrepancies are separated by roughly an order of magnitude in this metric, $\tau_{\text{gating}}$ needs only to fall between the two
+regimes rather than be tuned precisely (derivation in Supplement~\ref{sec:appendix-gating-separation}; empirical sensitivity in \S\ref{sec:eval-dedrift}).
+
+\paragraph{Observability guard-rail and three-state output}
+The scale separation above requires sufficient statistical
+support in the energy spectrum. When occupancy is low,
+diffuse cases can collapse to support sizes comparable to
+concentrated ones, making $K_{\mathrm{eff}}/L$ unreliable.
+We define occupancy as the cross-view fraction of non-empty
+sections:
+\begin{equation}\label{eq:occupancy}
+\mathrm{occ}
+  \;=\; \frac{1}{V}\sum_{v=1}^{V}\;
+        \frac{1}{L}\sum_{s=1}^{L}
+        \mathbf{1}\!\bigl[E_s^{(v)} > 0\bigr],
+\end{equation}
+where $E_s^{(v)}$ denotes $E_s$ evaluated on view~$v$.
+SCOUT uses a three-state gating rule:
+$g=\texttt{unknown}$ if $\mathrm{occ}<\tau_{\mathrm{occ}}$;
+otherwise, $g=\texttt{notgate}$ if $K_{\mathrm{eff}}/L\le\tau_{\mathrm{gating}}$,
+and $g=\texttt{gate}$ otherwise.
+Neither threshold requires narrow tuning.
+$\tau_{\text{gating}}$ only needs to fall between the
+concentrated and diffuse regimes of $K_{\mathrm{eff}}/L$,
+a gap that remains wide whenever occupancy is sufficient
+(\S\ref{sec:eval-dedrift}).
+$\tau_{\text{occ}}$ only needs to exceed the typical
+concentrated-fault occupancy~$BW/L$ by a moderate margin
+to preserve scale separation within the observable region.

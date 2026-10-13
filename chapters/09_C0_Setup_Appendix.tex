@@ -1,0 +1,97 @@
+\section{Evaluation Setup: Supplementary Details}
+\label{sec:appendix-setup}
+
+This section consolidates setup details referenced from
+\S\ref{sec:eval-method}, including synthetic workload
+construction, operating-point selection, and scale and
+microbenchmark details.
+
+\subsection{Synthetic Workload Construction}
+\label{sec:appendix-workloads}
+
+The synthetic evaluation uses four workload families spanning
+concentrated, diffuse, and heavy-tail noise workloads.
+All workloads are generated over the same shared segment space;
+drift is controlled independently by the side-imbalance
+parameter~$q$.
+
+\paragraph{Bimodal and diffuse}
+\texttt{bimodal} concentrates all differences in $B$ dirty
+segments, with the remaining segments clean.
+\texttt{diffuse} spreads differences approximately uniformly
+across a large number of segments.
+
+\paragraph{Gray-zone heavy-tail workloads}
+\texttt{heavy\_share} and \texttt{mix} place a large difference
+count $d_{\text{big}}$ on a small set of segments while many
+background segments each receive a smaller count
+$d_{\text{small}}$.
+For \texttt{mix}, difficulty is controlled by two axes:
+noise-to-signal ratio $\texttt{S/B}$ and separability
+$\texttt{ratio}{=}d_{\text{big}}/d_{\text{small}}$.
+\texttt{heavy\_share} is the high-multiplier special case used
+to probe behavior near the ranking-collapse boundary.
+
+\paragraph{Recall target}
+For mixed workloads, $\texttt{recall\_big}$ denotes the
+fraction of segments carrying $d_{\text{big}}$ that are
+covered by the candidate set.
+This metric isolates whether the method recovers the
+operationally important heavy segments when background noise is
+present.
+
+\subsection{Metrics and Operating-Point Protocol}
+\label{sec:appendix-metrics}
+
+At each stress point, every method sweeps its own internal
+control knob:
+SCOUT sweeps truncation ratio~\texttt{top\_r},
+B2 sweeps top-$K$,
+and B3 sweeps drill-down aggressiveness.
+The operating point is the minimum candidate fraction
+satisfying the recall requirement
+$\mathtt{median(recall\_big)}\ge 0.95$.
+If no setting satisfies the recall floor within the 2\%
+candidate-budget cap, the point is recorded as
+\textbf{N/A}.
+
+\subsection{Scale and Microbenchmark Details}
+\label{sec:appendix-scale}
+
+Synthetic experiments sweep total segment count from
+$10^4$ to $10^7$.
+The YCSB validation replays up to ${\sim}2{\times}10^9$
+records across $P{=}100{,}000$ range-partitioned segments,
+producing nearly $50\times$ hot-to-cold segment-size skew
+under the Zipfian workload.
+
+\begin{table}[!thbp]
+\centering
+\small
+\begin{tabular}{p{0.28\linewidth}p{0.62\linewidth}}
+\toprule
+Cost item & Reference anchor point \\
+\midrule
+\makecell[tl]{\textbf{Exchange} \\ (one-sided digest)}
+  & $4VLm_0$ bytes; $V{=}2$: 512\,KiB, $V{=}3$: 768\,KiB \\
+\makecell[tl]{\textbf{Decode} \\ (stats + score)}
+  & $\sim$0.33\,ms/view; $\sim$1\,ms at $V{=}3$; independent of $P$ \\
+\makecell[tl]{\textbf{Build} \\ (per-key update)}
+  & $\sim$2.9\,$\mu$s/key; includes window lookups and $k$ hash updates \\
+\bottomrule
+\end{tabular}
+\caption{Reference anchor points for probe overhead ($L{=}2048$, $m_0{=}32$, $k{=}2$).
+Decode and Build are measured from a C++ microbenchmark.}
+\label{tab:cost-anchor}
+\end{table}
+
+At this scale, the probe's digest-side overhead remains small:
+one-sided digest size stays below 1\,MiB and decode time stays
+below 1\,ms; reference anchor points for exchange size, decode
+latency, and build cost are summarized in
+Table~\ref{tab:cost-anchor}.
+In a single-threaded microbenchmark on a Xeon Platinum 8468,
+each key update takes approximately $2.9\,\mu$s; building the
+probe over $10^9$ keys therefore completes in minutes, with
+the dominant wall-clock cost still determined by local
+sequential-scan I/O rather than probe computation.

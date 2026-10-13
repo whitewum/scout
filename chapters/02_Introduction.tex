@@ -1,0 +1,38 @@
+\section{Introduction}
+\label{sec:introduction}
+
+We address continuous reconciliation in heterogeneous data replication, where source and target replicas must be repeatedly validated despite running on different storage engines, such as MySQL to TiDB or Oracle to ClickHouse.
+
+As in any replication pipeline, replicas can become temporarily or persistently inconsistent. In heterogeneous deployments, however, validation is harder because the two engines typically do not share internal checksum structures, reconciliation metadata, or repair primitives. Even where such internals are exposed, their formats, granularities, and version-specific behaviors evolve independently, making a stable cross-engine interface difficult to maintain. Validation must therefore operate through a black-box replica interface: sequential enumeration of comparable items without dependence on engine-specific internals.
+
+Heterogeneous replication also introduces additional sources of residual divergence beyond ordinary infrastructure faults. Even when a deployment-defined comparison contract normalizes documented incompatibilities, independently evolving engines can still disagree on version-specific behavior, corner cases, or other data-dependent effects. Because prevention cannot eliminate this residual class completely, validation must remain an independent line of defense. In deployments where heterogeneous systems operate side by side for extended periods, repeated reconciliation is therefore an operational requirement rather than a one-time migration check.
+Its cost must therefore be assessed per reconciliation round. The goal is not to remove the unavoidable local scan, but to ensure that normal rounds incur only fixed diagnostic overhead, while anomalous rounds pay additional cost only in proportion to the scope of suspected discrepancy. We express this objective through the following idealized per-cycle cost model:
+\[
+\text{Cost}_{\text{cycle}}
+  \;=\; C_{\text{scan}}
+  \;+\; C_{\text{probe}}
+  \;+\; \mathbf{1}[\hat{D}>\tau]\;\cdot\;
+        C_{\text{verify}}(|\mathcal{C}|),
+\]
+where $C_{\text{scan}}$ is the local sequential-scan cost shared by external
+validation methods operating through a black-box replica interface;
+$C_{\text{probe}}$ is the fixed-size digest overhead---summary maintenance,
+exchange, and decoding; the indicator is triggered when the estimated
+discrepancy $\hat{D}$ exceeds an actionable threshold~$\tau$; and
+$C_{\text{verify}}(|\mathcal{C}|)$ is the downstream verification cost,
+proportional to the candidate scope $|\mathcal{C}|$ rather than the full
+segment count~$P$.
+
+%In contrast, per-range checksum workflows pay $O(P)$ every round, and multi-round drill-down mechanisms multiply interaction cost by cross-datacenter RTT.
+
+Achieving this cost model in a single round requires a fixed-size digest whose cost remains decoupled from data scale and whose construction relies only on a black-box replica interface. Existing mechanisms do
+not satisfy this combination of requirements. Multi-round approaches, including Merkle-based anti-entropy and set reconciliation, can progressively localize differences, but they depend on iterative
+interaction. By contrast, single-round summaries can often support either discrepancy estimation or candidate prioritization under a fixed budget, but not both within the same exchange. They also cannot tell when candidate generation should be withheld—that is, when the candidate set is likely to approach the full segment count. Naively composing separate sketches does not close this gap. Splitting the budget weakens both components. Moreover, the resulting estimates need not share a common statistical basis, so scale assessment, admission, and candidate ranking can produce inconsistent conclusions.
+
+
+We present SCOUT, a single-round diagnostic probe for continuous reconciliation under a fixed digest budget. Rather than recovering all differences, SCOUT decides how large the discrepancy is, whether narrowed-scope verification is worthwhile given the discrepancy shape, and where downstream verification should focus. From one sketch exchange it produces three corresponding outputs: a discrepancy-scale estimate (\emph{sizing}), an admission decision on whether candidate compression is economical (\emph{gating}), and a compressed candidate set for precise downstream verification (\emph{triage}).
+%SCOUT assumes a deployment-defined comparison contract and diagnoses residual divergence with respect to it.
+
+SCOUT relies on two ideas. First, it preserves locality in the observation space, so that concentrated discrepancies appear as localized peaks that can be compressed by sliding-window aggregation. Second, it uses a de-drifted variance statistic that removes first-order side imbalance, allowing the same probe to support stable estimation and admission even under highly asymmetric discrepancies. When the evidence is too diffuse or too weak to support reliable compression, SCOUT explicitly abstains and defers to a conservative fallback.
+
+We make three contributions. (1) We formulate the problem as a single-round, fixed-budget diagnostic contract for heterogeneous replication, and use this contract to identify the structural gap in existing approaches (\S\ref{sec:problem}). (2) We design SCOUT, a unified probe in which scale estimation, admission control, and candidate triage share a single de-drifted signal. A locality-preserving observation geometry enables candidate compression for concentrated faults. The same de-drifted statistic keeps all three outputs stable under arbitrary side imbalance (\S\ref{sec:design}). (3) We evaluate SCOUT against same-budget baselines and YCSB Zipfian workloads (\S\ref{sec:evaluation}). The results show substantial candidate-scope reduction under concentrated faults, stable sizing under drift, and reliable shape-based gating with low false-alarm and false-rejection rates.

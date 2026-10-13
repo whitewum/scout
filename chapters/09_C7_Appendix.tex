@@ -1,0 +1,98 @@
+\section{Hash Quality and Sensitivity to $k$}
+\label{sec:appendix-hash}
+
+This paper treats each view as an independent hash channel. In our implementation and evaluation, this independence is enforced through separate randomization across views in both the mapping from segments to window start positions and the $k$ within-window hash edges used by each key. To preserve the ``$k$ distinct cells'' semantics assumed in the main text, the system retries until it obtains $k$ distinct landing positions for each key, and falls back to deterministic placement only if the retry budget is exhausted.
+
+
+\subsection{Key Input Structure and Hash Quality}
+
+
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{rcc}
+\toprule
+$k$ & \shortstack{raw p90 \\ ($|\texttt{rel\_err\_scaled}|$)} & \shortstack{corrected p90 \\ ($ |\cdot| $)} \\
+\midrule
+1 & 0.0184 & 0.0184 \\
+2 & 0.0197 & 0.0189 \\
+3 & 0.0207 & 0.0185 \\
+\bottomrule
+\end{tabular}
+\caption{Scaling bias and post-processing correction for varying $k$.}
+\label{tab:c7-a2}
+\end{table}
+
+\begin{table*}[!thbp]
+\centering
+\small
+\begin{tabular}{lllrrr}
+\toprule
+Config $(P, L, B)$ & \texttt{hash\_mode} & \shortstack[l]{key distrib-\\ution pattern} & \shortstack[l]{best \\ top\_r} & \texttt{cand\_p50} & \texttt{cand\_p90} \\
+\midrule
+$(10^5, 2048, 10)$ & sha256 & sequential & 0.02 & 1.10e-4 & 1.20e-4 \\
+$(10^5, 2048, 10)$ & sha256 & hotset & 0.02 & 1.10e-4 & 1.20e-4 \\
+$(10^5, 2048, 10)$ & mix64\_only & sequential & 0.02 & 1.10e-4 & 1.20e-4 \\
+$(10^5, 2048, 10)$ & mix64\_only & hotset & 0.02 & 1.10e-4 & 1.20e-4 \\
+$(10^5, 2048, 10)$ & raw\_mod & sequential & 0.02 & 1.10e-4 & 1.20e-4 \\
+$(10^5, 2048, 10)$ & raw\_mod & hotset & 0.02 & 1.00e-4 & 1.20e-4 \\
+$(10^7, 8192, 10)$ & sha256 & sequential & 0.005 & 1.10e-6 & 1.30e-6 \\
+$(10^7, 8192, 10)$ & mix64\_only & sequential & 0.005 & 1.10e-6 & 1.30e-6 \\
+$(10^7, 8192, 10)$ & raw\_mod & sequential & 0.005 & 1.10e-6 & 1.30e-6 \\
+$(10^5, 4096, 100)$ & sha256 & sequential & 0.10 & 1.98e-3 & 2.10e-3 \\
+$(10^5, 4096, 100)$ & mix64\_only & sequential & 0.10 & 1.97e-3 & 2.11e-3 \\
+$(10^5, 4096, 100)$ & raw\_mod & sequential & 0.10 & 1.95e-3 & 2.05e-3 \\
+\bottomrule
+\end{tabular}
+\caption{Triage comparison under different key structures and hash qualities (representative configurations).}
+\label{tab:c7-a1}
+\end{table*}
+
+The preceding evaluation defaults to a high-grade hash (\texttt{sha256}). This section examines whether the triage operating point changes when hash quality is degraded or key inputs deviate from a uniform distribution.
+
+The experiment sweeps two key structures---\texttt{sequential} (consecutively incrementing keys) and \texttt{hotset} (keys with a localized hotspot)---and three hash implementations: \texttt{sha256}, \texttt{mix64\_only} (integer mixing only), and \texttt{raw\_mod} (direct modular reduction, used here as a weak-hash negative control). The operating point is taken as the lowest-budget point achieving $\texttt{succ}\ge 0.95$, with the median (p50) and 90th-percentile (p90) candidate fraction reported at that point.
+
+
+
+Table~\ref{tab:c7-a1} reports representative configurations. Across all of them, the effect of hash implementation and key structure remains within measurement noise: the discrete-grid best \texttt{top\_r} values are identical, and \texttt{cand\_p50}/\texttt{cand\_p90} differ by no more than 5\%. Even the negative control \texttt{raw\_mod} does not produce an observable shift within the tested parameter range. SCOUT's triage operating point is therefore largely insensitive to hash implementation and key distribution pattern.
+
+\subsection{Effect of $k$ on Triage and Sizing}
+
+We next examine how varying $k$ affects triage and sizing. For triage, the fixed-budget envelope from the $m_0{\times}k$ sweep shows no reproducible separation among the budget--reliability curves for $k\in\{1,2,3\}$ over the tested range.
+
+
+
+\begin{table*}[!htbp]
+\centering
+\small
+\begin{tabular}{p{0.28\textwidth}p{0.62\textwidth}}
+\toprule
+Slice family & Envelope summary at representative budgets \\
+\midrule
+\makecell[tl]{$P{=}10^6, L{=}8192, B{=}100,$\\$d_{\text{big}}{=}200, m_0\in\{64,128,256\}$} &
+At $\texttt{cand\_frac}\le 2{\times}10^{-4}$, all $k\in\{1,2,3\}$ fail ($\texttt{succ@0.95}=0$); at $\le 5{\times}10^{-4}$ and $\le 10^{-3}$, all succeed ($\texttt{succ@0.95}=1$). \\
+\addlinespace
+\makecell[tl]{$P{=}10^6, L{=}32768, B{=}100,$\\$d_{\text{big}}{=}200, m_0\in\{64,128,256\}$} &
+All three $k$ values already achieve $\texttt{succ@0.95}=1$ at $\texttt{cand\_frac}\le 2{\times}10^{-4}$; the envelope remains identical at larger budgets. \\
+\addlinespace
+\makecell[tl]{$P{=}10^3, L{=}65536, B{=}10,$\\$d_{\text{big}}{=}200, m_0\in\{64,128,256\}$} &
+All three $k$ values remain below the reliability target even at $\texttt{cand\_frac}\le 10^{-3}$, giving $\texttt{succ@0.95}=0$ throughout. \\
+\bottomrule
+\end{tabular}
+\caption{Representative fixed-budget triage envelopes from the $m_0{\times}k$ sweep across three slice families.}
+\label{tab:c7-a3}
+\end{table*}
+
+
+
+Table~\ref{tab:c7-a3} shows the corresponding step-like behavior under a fixed candidate budget: a slice is either clearly below the usable budget range or already in the stable regime, and the transition occurs at essentially the same budget for all three $k$ values.
+
+The effect of $k$ is more visible in sizing. Increasing $k$ changes the estimator through two mechanisms. The first is locality bias (\S\ref{sec:appendix-sizing-bias}): larger $k$ increases $k/M_{\text{local}}$, thereby amplifying the discrepancy between the global approximation $(1{-}k/M)$ and the local reality $(1{-}k/M_{\text{local}})$. The second is diminishing marginal information gain at the section level: because the sizing statistic $E_s$ is computed per section over $m_0$ cells, the information contributed by additional updates becomes mildly sublinear as $k$ grows. To capture this second effect, we use
+\[
+k_{\mathrm{eff}}(m_0,k) = m_0\Bigl(1-(1-\tfrac{1}{m_0})^k\Bigr)
+\]
+to approximate the effective number of occupied cells in a section-level occupancy model with $k$ throws. This yields a corresponding correction factor, $k/k_{\mathrm{eff}}$, for the scaling bias. Table~\ref{tab:c7-a2} summarizes the p90 sizing error across three levels of $k$, aggregated over all configurations and \texttt{top\_r} values. The raw p90 (with Bessel correction only) increases monotonically with $k$. After applying the $k/k_{\mathrm{eff}}$ correction, the corrected p90 falls into a narrow band of 1.84\%--1.89\%, with mutual differences below 0.1 percentage points. Once this systematic trend is removed, the residual is dominated by sampling variance and no longer shows a monotonic dependence on $k$.
+
+
+
+Taken together, these results show that, within the operating range covered by this paper, hash implementation and key structure do not produce an observable shift in the triage operating point. The main effect of varying $k$ appears instead in sizing, where it introduces a predictable scaling bias that is substantially aligned by the $k_{\mathrm{eff}}$ correction factor.

@@ -1,0 +1,182 @@
+% SCOUT probe structure (b): 2 views + reverse mapping + (implicit) intersection + energy peak
+\begin{tikzpicture}[
+    x=1cm, y=1cm, font=\footnotesize, >=Stealth,
+    lbl/.style    = {font=\scriptsize, align=center, inner sep=1.5pt},
+    note/.style   = {font=\scriptsize, text=black!60},
+    arrlbl/.style = {font=\scriptsize, align=center, fill=white,
+                     fill opacity=.92, text opacity=1, inner sep=1.5pt},
+    segbox/.style = {draw, rounded corners=1pt, minimum width=0.34cm,
+                     minimum height=0.30cm, inner sep=0pt, font=\tiny},
+  ]
+
+  % ----------------------------------------------------------------
+  % Geometry knobs
+  % ----------------------------------------------------------------
+  \def\mvX{0.65}
+  \def\mvN{12}
+  \def\mvW{0.42}
+  \def\mvH{0.30}
+  \def\mvGap{0.70}
+  \pgfmathsetmacro{\stripRight}{\mvX+\mvN*\mvW}
+
+  % ----------------------------------------------------------------
+  % Segment row (top)
+  % ----------------------------------------------------------------
+  \def\segX{\mvX}
+  \def\segY{0.45}
+  \def\segN{10}
+  \def\segW{0.50}
+
+  % segments: 1..10
+  % true hot: 5,6 ; halo (normal): 4,7 ; halo (small): 3,8 ; rest: neutral
+  \foreach \i in {0,...,9} {
+    \pgfmathtruncatemacro{\sid}{\i+1}
+    \pgfmathtruncatemacro{\isHot}{(\sid==5 || \sid==6) ? 1 : 0}
+    \pgfmathtruncatemacro{\isHalo}{(\sid==4 || \sid==7) ? 1 : 0}
+    \pgfmathtruncatemacro{\isHaloSmall}{(\sid==3 || \sid==8) ? 1 : 0}
+
+    \ifnum\isHot=1
+      \node[segbox, fill=orange!60, line width=0.8pt]
+        (seg\sid) at ({\segX+\i*\segW},{\segY}) {\sid};
+    \else
+      \ifnum\isHalo=1
+        \node[segbox, fill=orange!20, line width=0.6pt]
+          (seg\sid) at ({\segX+\i*\segW},{\segY}) {\sid};
+      \else
+        \ifnum\isHaloSmall=1
+          \node[segbox, fill=orange!10, draw=orange!25, line width=0.5pt]
+            (seg\sid) at ({\segX+\i*\segW},{\segY}) {\sid};
+        \else
+          \node[segbox, fill=black!5, draw=black!25]
+            (seg\sid) at ({\segX+\i*\segW},{\segY}) {\sid};
+        \fi
+      \fi
+    \fi
+  }
+
+  % ----------------------------------------------------------------
+  % Two view strips (middle)
+  % ----------------------------------------------------------------
+  \def\mvYstart{-0.55}
+
+  % View 1: selected window at sections 2–5
+  \pgfmathsetmacro{\yyA}{\mvYstart}
+  \draw[thick] (\mvX,\yyA) rectangle (\stripRight,{\yyA+\mvH});
+  \foreach \i in {1,...,11} {
+    \draw[thin, black!25]
+      ({\mvX+\i*\mvW},\yyA) -- ({\mvX+\i*\mvW},{\yyA+\mvH});
+  }
+  % halo-ish neighbors (dashed)
+  \fill[orange!10]
+    ({\mvX+0*\mvW},\yyA) rectangle ({\mvX+2*\mvW},{\yyA+\mvH});
+  \draw[thick, orange!45!black, dashed]
+    ({\mvX+0*\mvW},\yyA) rectangle ({\mvX+2*\mvW},{\yyA+\mvH});
+  \fill[orange!10]
+    ({\mvX+6*\mvW},\yyA) rectangle ({\mvX+7*\mvW},{\yyA+\mvH});
+  \draw[thick, orange!45!black, dashed]
+    ({\mvX+6*\mvW},\yyA) rectangle ({\mvX+7*\mvW},{\yyA+\mvH});
+  % main selected window (solid)
+  \fill[orange!35]
+    ({\mvX+2*\mvW},\yyA) rectangle ({\mvX+6*\mvW},{\yyA+\mvH});
+  \draw[thick, orange!70!black]
+    ({\mvX+2*\mvW},\yyA) rectangle ({\mvX+6*\mvW},{\yyA+\mvH});
+  \node[note, anchor=east] at ({\mvX-0.06},{\yyA+\mvH/2}) {view 1};
+
+  % View 2: selected window at sections 6–9
+  \pgfmathsetmacro{\yyB}{\mvYstart - \mvGap}
+  \draw[thick] (\mvX,\yyB) rectangle (\stripRight,{\yyB+\mvH});
+  \foreach \i in {1,...,11} {
+    \draw[thin, black!25]
+      ({\mvX+\i*\mvW},\yyB) -- ({\mvX+\i*\mvW},{\yyB+\mvH});
+  }
+  % halo-ish neighbors (dashed)
+  \fill[orange!10]
+    ({\mvX+5*\mvW},\yyB) rectangle ({\mvX+6*\mvW},{\yyB+\mvH});
+  \draw[thick, orange!45!black, dashed]
+    ({\mvX+5*\mvW},\yyB) rectangle ({\mvX+6*\mvW},{\yyB+\mvH});
+  \fill[orange!10]
+    ({\mvX+10*\mvW},\yyB) rectangle ({\mvX+10.8*\mvW},{\yyB+\mvH});
+  \draw[thick, orange!45!black, dashed]
+    ({\mvX+10*\mvW},\yyB) rectangle ({\mvX+10.8*\mvW},{\yyB+\mvH});
+  % main selected window (solid)
+  \fill[orange!35]
+    ({\mvX+6*\mvW},\yyB) rectangle ({\mvX+10*\mvW},{\yyB+\mvH});
+  \draw[thick, orange!70!black]
+    ({\mvX+6*\mvW},\yyB) rectangle ({\mvX+10*\mvW},{\yyB+\mvH});
+  \node[note, anchor=east] at ({\mvX-0.06},{\yyB+\mvH/2}) {view 2};
+
+  % ----------------------------------------------------------------
+  % Reverse-mapping arrows (avoid crossing)
+  % ----------------------------------------------------------------
+  % View1 arrow -> near seg5
+  \coordinate (v1c) at ({\mvX+4*\mvW},{\yyA+\mvH});
+  \coordinate (s1c) at ({\segX+4*\segW},{\segY-0.18}); % around seg5
+  \draw[->, thick, black!55] (v1c) -- (s1c);
+
+  % View2 arrow -> near seg5
+  \coordinate (v2c) at ({\mvX+8*\mvW},{\yyB+\mvH});
+  \coordinate (s2c) at ({\segX+4*\segW},{\segY-0.18}); % around seg5
+  \draw[->, thick, black!55] (v2c) -- (s2c);
+
+  % ----------------------------------------------------------------
+  % Intersection marker above segment row: brace over seg5..6 labeled \mathcal{C}
+  % (keep the brace, but move \bigcap_v to below seg6)
+  \draw[decorate, decoration={brace, amplitude=3.5pt}]
+    (seg5.north west) -- (seg6.north east)
+    node[midway, above=4pt, lbl] {$\mathcal{C}$};
+
+  % \bigcap_v moved to below seg6
+  \node[note, anchor=north] at ($(seg6.south)+(0.25,-0.02)$) {$\bigcap_v$};
+
+  % ----------------------------------------------------------------
+  % Energy spectrum (bottom) — simplified labels
+  % ----------------------------------------------------------------
+  \pgfmathsetmacro{\barY}{\yyB - 1.15}
+  \def\barX{\mvX}
+  \def\barW{\mvW}
+  \def\barScale{0.85}
+
+  % Bars: peak aligned with view-1 selected window (sections 2–5)
+  \foreach \idx/\ht in {
+    0/0.08, 1/0.10,
+    2/0.65, 3/0.80, 4/0.72, 5/0.50,
+    6/0.10, 7/0.07, 8/0.09, 9/0.06, 10/0.08, 11/0.07} {
+    \pgfmathsetmacro{\bh}{\ht*\barScale}
+    \pgfmathtruncatemacro{\isPeak}{(\idx>=2 && \idx<=5) ? 1 : 0}
+    \ifnum\isPeak=1
+      \fill[orange!45]
+        ({\barX+\idx*\barW},\barY)
+        rectangle ({\barX+(\idx+1)*\barW},{\barY+\bh});
+      \draw[orange!70!black]
+        ({\barX+\idx*\barW},\barY)
+        rectangle ({\barX+(\idx+1)*\barW},{\barY+\bh});
+    \else
+      \fill[black!10]
+        ({\barX+\idx*\barW},\barY)
+        rectangle ({\barX+(\idx+1)*\barW},{\barY+\bh});
+      \draw[black!30]
+        ({\barX+\idx*\barW},\barY)
+        rectangle ({\barX+(\idx+1)*\barW},{\barY+\bh});
+    \fi
+  }
+  \draw[thick] (\barX,\barY) -- ({\barX+12*\barW},\barY);
+
+  % x-label
+  \node[note] at ({\barX+6*\barW},{\barY-0.18}) {section $s$};
+
+  % Move E_s to the right of the peak (avoid overlap with left label)
+  \node[note, rotate=90, anchor=south]
+    at ({\barX+7.35*\barW},{\barY+0.45*\barScale}) {$E_s$};
+
+  % peak brace with only "peak"
+  \draw[decorate, decoration={brace, amplitude=3pt}, orange!65!black]
+    ({\barX+2*\barW},{\barY+0.80*\barScale+0.08})
+    -- ({\barX+6*\barW},{\barY+0.80*\barScale+0.08})
+    node[midway, above=2pt, lbl, text=orange!65!black] {peak};
+
+  % Left label: align nicely (same x as strip labels), no overlap
+  \node[note, anchor=east, align=left]
+    at ({\mvX+0.75},{\barY+0.50})
+    {view 1 energy};
+
+\end{tikzpicture}

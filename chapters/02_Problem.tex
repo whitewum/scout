@@ -1,0 +1,71 @@
+
+\section{Problem Formulation}
+\label{sec:problem}
+
+\paragraph{System Model and Constraints}
+We consider two replicas A and B that must remain continuously
+consistent and may reside on heterogeneous
+systems. The key space is partitioned into $P$ logical units,
+called \emph{segments}, by a deterministic segmenter shared by
+both sides (e.g., consistent hashing or prefix mapping), so
+that the same key is assigned to the same segment without
+accessing engine-specific metadata.
+
+In each reconciliation round, A and B construct and exchange a
+fixed-size probe, then decode it locally to obtain diagnostic
+signals that guide downstream precise verification and repair.
+The probe is diagnostic rather than restorative: it does not
+recover all differing items, but summarizes their scale, shape,
+and likely scope.
+
+In heterogeneous deployments, agreement on key equality and
+segmentation is provided by a deployment-defined comparison
+contract: a deterministic normalization layer plus a shared
+segmenter. SCOUT assumes this contract and diagnoses residual
+divergence with respect to it; defining the contract itself is
+outside the scope of this paper. The only interface requirement
+is sequential enumeration of comparable items---raw keys or
+normalized identifiers that incorporate value or version
+digests---with incremental hash updates and no dependence on
+engine-specific internals. Because the observation budget is
+much smaller than $P$, aliasing is unavoidable, and the probe
+cannot guarantee useful candidate compression under all
+discrepancy patterns. This limitation motivates the admission
+mechanism defined below.
+
+\paragraph{Diagnostic Primitives}
+\label{sec:problem-primitives}
+We now define the three output types precisely.
+
+\textbf{Sizing (scale estimation)} estimates the global difference scale. Let $D^{+}=|A\setminus B|$ and $D^{-}=|B\setminus A|$; the total discrepancy size is $D=D^{+}+D^{-}$. Sizing always emits $\hat{D}$, regardless of gating verdict or discrepancy shape. In normal rounds, $\hat{D}$ stays near zero, with small residual values attributable to estimation noise, allowing the system to skip downstream verification; in anomalous rounds it provides a severity signal independent of the gating verdict.
+
+\textbf{Gating (admission control)} determines whether the current round's discrepancy shape supports economical candidate compression. It emits a three-valued verdict: \texttt{notgate} admits candidate generation, \texttt{gate} diverts to a conservative fallback, and 
+\texttt{unknown} (\emph{insufficient observability}) signals that the probe's fixed-budget observation lacks sufficient support for a reliable shape verdict. In this case, downstream policy combines $\hat{D}$ and other observables to determine the round's disposition.
+
+\textbf{Triage (candidate scope)} is executed when gating
+produces a \texttt{notgate} verdict. It outputs a candidate
+segment set $\mathcal{C}\subseteq \{1,\ldots,P\}$ whose objective
+is to minimize downstream scan scope, typically measured by
+$|\mathcal{C}|$ or candidate fraction, subject to coverage of
+serious discrepancies.
+
+Together, these define the probe's interface contract: from one
+digest exchange the system obtains $(g,\hat{D},\mathcal{C})$---an
+admission verdict, a discrepancy-scale estimate, and a candidate
+segment set produced when $g=\texttt{notgate}$. Precise
+localization and repair within $\mathcal{C}$ are delegated to
+downstream mechanisms such as Merkle trees or IBLTs.
+
+\paragraph{Drift: Side Imbalance}
+\label{sec:problem-drift}
+The distribution of differing keys across the two sides is often
+asymmetric. Under bidirectional replication, for example, both sides
+may continue receiving writes while update propagation proceeds
+unevenly, causing unsynchronized keys to accumulate predominantly on
+one side. We refer to this systematic side imbalance as \textit{drift},
+parameterized by a scalar $q\in[0,1]$ denoting side~A's share of the
+total differing keys ($q=0.5$ means the differences are evenly split,
+while $q\to 0$ or $1$ means they reside almost entirely on one side).
+A practical probe should remain accurate across this range of
+side splits rather than depending on a particular allocation of differences
+between the two sides.

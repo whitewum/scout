@@ -1,0 +1,79 @@
+% TEMPLATE for Usenix papers, specifically to meet requirements of
+%  USENIX '05
+% originally a template for producing IEEE-format articles using LaTeX.
+%   written by Matthew Ward, CS Department, Worcester Polytechnic Institute.
+% adapted by David Beazley for his excellent SWIG paper in Proceedings,
+%   Tcl 96
+% turned into a smartass generic template by De Clarke, with thanks to
+%   both the above pioneers
+% use at your own risk.  Complaints to /dev/null.
+% make it two column with no page numbering, default is 10 point
+
+% Munged by Fred Douglis <douglis@research.att.com> 10/97 to separate
+% the .sty file from the LaTeX source template, so that people can
+% more easily include the .sty file into an existing document.  Also
+% changed to more closely follow the style guidelines as represented
+% by the Word sample file. 
+
+% Note that since 2010, USENIX does not require endnotes. If you want
+% foot of page notes, don't include the endnotes package in the 
+% usepackage command, below.
+
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{usenix2019_v3}
+\usepackage{epsfig}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,positioning,decorations.pathreplacing}
+\usepackage{booktabs}
+\usepackage{pifont}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xr-hyper}
+\externaldocument{build/supplement}
+\begin{document}
+
+%don't want date printed
+\date{}
+
+%make title bold and 14 pt font (Latex default is non-bold, 16 pt)
+
+\title{SCOUT: A Single-Round, Fixed-Budget Probe for Continuous Reconciliation in Heterogeneous Replication}
+
+%author{
+%{\rm Your N.\ Here}\\
+%Your Institution
+%\and
+%{\rm Second Name}\\
+%Second Institution
+%}
+
+\maketitle
+
+% Use the following at camera-ready time to suppress page numbers.
+% Comment it out when you first submit the paper for review.
+\thispagestyle{empty}
+
+\input{chapters/01_Abstract}
+\input{chapters/02_Introduction}
+\input{chapters/02_Problem}
+\input{chapters/02_RelatedWork}
+\input{chapters/04_SCOUT.tex}
+\input{chapters/06_Evaluation_0}
+\input{chapters/06_Evaluation_C1}
+\input{chapters/06_Evaluation_C2}
+\input{chapters/06_Evaluation_C4}
+\input{chapters/06_Evaluation_C5}
+\input{chapters/06_Evaluation_C6}
+\input{chapters/07_Discussion}
+\input{chapters/08_Conclusion}
+
+\bibliographystyle{unsrt}
+\bibliography{ref}
+\end{document}
+
+
+
